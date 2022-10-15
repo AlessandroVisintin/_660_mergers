@@ -16,9 +16,9 @@ from queue import Queue, PriorityQueue
 from threading import Thread, Event
 
 
-MAX_DELTA = 60 * 60 * 12
-PATH = 'out/_660_mergers'
-DB_CONFIG = 'config/_660_mergers/_660_mergers.yaml'
+MAX_DELTA = 60 * 60 * 8
+PATH = 'out/p660'
+DB_CONFIG = 'config/p660/p660.yaml'
 API_CRED = 'config/WebUtils/twitterapi_cred.yaml'
 
 # load database of users
