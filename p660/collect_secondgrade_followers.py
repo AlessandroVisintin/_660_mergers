@@ -61,14 +61,17 @@ for k,v in apis.items():
 
 # get userids
 with open(f'{PATH}/usernames.txt', 'r') as f:
+	print('Loading users...')
 	usernames = '","'.join([line.strip() for line in f])
 	query = f'SELECT id,username FROM Users WHERE username IN ("{usernames}");'
 	db.add_query('select', 'uname2uid', query)
 	USERS = [row for row in db.select('uname2uid')]
 
-
 for userid, username in USERS:
 	print(userid ,username)
+
+	print('Loading followers...')
+	done = set()
 
 	print('Loading priority queue...')
 	pset = set()
@@ -76,13 +79,18 @@ for userid, username in USERS:
 	query = f'SELECT Users_id2 FROM IsFollowedBy WHERE Users_id1 = {userid};'
 	db.add_query('select', 'get_follows', query)
 	for row in db.select('get_follows'):
-		pqueue.put((2,row[0]))
+		query = f'SELECT EXISTS (SELECT 1 FROM IsFollowedBy WHERE Users_id1 = {row[0]});'
+		db.add_query('select', 'check', query)
+		if not [t for t in db.select('check')][0][0]:
+			pqueue.put((2,row[0]))
 
 	start = time.time()
 	while pqueue.qsize() > 0 and time.time() - start < MAX_DELTA:
 		p, uid = pqueue.get()
 		in_look.put([uid])
 		data = out_look.get()
+		if data is None:
+			continue
 		
 		uid = data[0]['id']
 		usr = data[0]['screen_name']
