@@ -59,10 +59,14 @@ for merger,accounts in mergers.items():
 		rows = [[],[]]
 		while time.time() - start < MAX_DELTA:
 			if pqueue.qsize() == 0:
-				p660.add_index(f'{account}_Fwsid1', f'{account}_Fws', 'id1')
-				p660.add_index(f'{account}_Fwsid2', f'{account}_Fws', 'id2')
-				p660.add_index(f'{account}_FFid1', f'{account}_FF', 'id1')
-				p660.add_index(f'{account}_FFid2', f'{account}_FF', 'id2')
+				p660.add_index(
+					f'{account}_Fwsid1', f'{account}_Fws', 'id1', if_not_exists=True)
+				p660.add_index(
+					f'{account}_Fwsid2', f'{account}_Fws', 'id2', if_not_exists=True)
+				p660.add_index(
+					f'{account}_FFid1', f'{account}_FF', 'id1', if_not_exists=True)
+				p660.add_index(
+					f'{account}_FFid2', f'{account}_FF', 'id2', if_not_exists=True)
 				q = (
 					f'CREATE TEMPORARY TABLE {account}_remainingFws AS '
 					f'SELECT a.id2 AS id FROM {account}_Fws a '
