@@ -91,21 +91,20 @@ for merger,accounts in mergers.items():
 					f'SELECT id2, COUNT(*) AS e FROM {account}_remainingFF '
 					f'GROUP BY id2) c ON a.id = c.id2 '
 					f'ORDER BY deg DESC '
-					f'LIMIT 1000;'
+					f'LIMIT 3600;'
 					)
 				for row in p660.fetch(query=q):
 					p = 2 if row[1] is None else 1 / row[1]
 					pqueue.put((p,row[0]))
-				p660.fetch(query=f'DROP TABLE {account}_remainingFws;')
-				p660.fetch(query=f'DROP TABLE {account}_remainingFF;')
-				if pqueue.qsize() == 0:
-					break
+				p660.drop('table', f'{account}_remainingFws')
+				p660.drop('table', f'{account}_remainingFF')
 				p660.drop('index', f'{account}_Fwsid1')
 				p660.drop('index', f'{account}_Fwsid2')
 				p660.drop('index', f'{account}_FFid1')
 				p660.drop('index', f'{account}_FFid2')
-				p660.drop('table', f'{account}_remainingFws')
-				p660.drop('table', f'{account}_remainingFF')
+
+				if pqueue.qsize() == 0:
+					break
 			
 			p, uid = pqueue.get()
 			apis[lookup_users][0].put([uid])
