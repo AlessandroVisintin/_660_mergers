@@ -104,6 +104,8 @@ for merger,accounts in mergers.items():
 				p660.drop('index', f'{account}_Fwsid2')
 				p660.drop('index', f'{account}_FFid1')
 				p660.drop('index', f'{account}_FFid2')
+				p660.drop('table', f'{account}_remainingFws')
+				p660.drop('table', f'{account}_remainingFF')
 			
 			p, uid = pqueue.get()
 			apis[lookup_users][0].put([uid])

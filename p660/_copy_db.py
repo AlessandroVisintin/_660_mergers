@@ -1,32 +1,55 @@
+from p660.utils import parse_user_object
 from StorageUtils.SQLite import SQLite
+from WebUtils.threaded_twitter import lookup_users
+from JSONWrap.utils import load
+
+from queue import Queue, PriorityQueue
+from threading import Thread
 
 
 OUT = 'out/p660'
 CFG = 'config/p660'
+CL_CFG = f'{CFG}/clusters.yaml'
+CR_CFG = 'config/WebUtils/twitterapi_cred.yaml'
+OLD_OUT = f'{OUT}/_p660.db'
+P660_OUT = f'{OUT}/p660.db'
+P660_CFG = f'{CFG}/p660.yaml'
 
-db = SQLite(f'{OUT}/p660.db',config=f'{CFG}/p660.yaml')
-out = SQLite(f'{OUT}/Users.db',config=f'{CFG}/p660.yaml')
+apis = {
+	lookup_users: [Queue(), Queue(), []],
+	}
+for name, k in load(CR_CFG).items():
+	for func, v in apis.items():
+		t = Thread(target=func, args=(k, 'user', v[0], v[1]))
+		t.start()
+		v[2].append(t)
 
-with open(f'{OUT}/usernames.txt', 'r') as f:	 
-	unm = '","'.join([line.strip() for line in f])
-	
-query = f'SELECT * FROM Users WHERE username IN ("{unm}");'
-ref = db.fetch(query=query)
-out.fetch(name='insert_Users', params=ref)
 
-cache = []
-for i,row in enumerate(db.yields(query=f'SELECT * FROM IsFollowedBy;')):
-	if not i % 10000: print(i)
-	for e in ref:
-		if e[0] == row[0]:
-			cache.append(row)
-			break
-	
-	if len(cache) > 5000:
-		out.fetch(name='insert_IsFollowedBy', params=cache)
+old = SQLite(OLD_OUT)
+p660 = SQLite(P660_OUT, config=P660_CFG)
+
+mergers = {}
+for j,u in load(CL_CFG).items():
+	for account in u[0]:
+		print(account)
+		
+		p660.fetch(name='create_fws', format={'t':account})
+		
+		apis[lookup_users][0].put([account])
+		data = apis[lookup_users][1].get()
+		obj = parse_user_object(data[0])
+		
+		p660.fetch(name='insert_Users', params=[obj])
+		
+		q = f'SELECT * FROM IsFollowedBy WHERE Users_id1 = {obj[0]};'
 		cache = []
-
-out.fetch(name='insert_IsFollowedBy', params=cache)
-
-del db
-del out
+		for row in old.yields(query=q):
+			cache.append((row[0],row[1],None,None))
+			if len(cache) > 10000:
+				p660.fetch(name='insert_fws', format={'t':account}, params=cache)
+				cache = []
+		p660.fetch(name='insert_fws', format={'t':account}, params=cache)
+		cache = []
+		
+del old
+del p660

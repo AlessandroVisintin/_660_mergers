@@ -7,9 +7,9 @@ db = SQLite(f'{OUT}/p660.db')
 for row in db.yields(query='SELECT * FROM Users'):
  	print(row)
 
-db.schema()
-print(db.size('atvi_ab_Fws'))
-for row in db.yields(query='SELECT * FROM atvi_ab_Fws;'):
+
+print(db.size('Collected'))
+for row in db.yields(query='SELECT * FROM Collected;'):
  	print(row)
  	break
 
