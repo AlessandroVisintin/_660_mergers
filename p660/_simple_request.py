@@ -21,5 +21,9 @@ api = apiv11(credentials[key], 'user')
 # collect
 #d1 = api.get_followers(screen_name=USERNAME)
 #d2 = api.get_follower_ids(screen_name=USERNAME)
-d3 = api.lookup_users(user_id=[13])
+
+d3 = api.lookup_users(user_id=[338])
+
 #rates = api.rate_limit_status()
+
+#d3 = api.get_friendship(source_screen_name='tinexta', target_screen_name='sergio_dionese')
