@@ -1,62 +1,29 @@
-from p660.utils import parse_user_object, twt2stamp
 from StorageUtils.SQLite import SQLite
-from WebUtils.threaded_twitter import lookup_users
 from JSONWrap.utils import load
-
-import time
-from queue import Queue
-from threading import Thread
 
 
 OUT = 'out/p660'
 CFG = 'config/p660'
+DB_OUT = f'{OUT}/p660.db'
+DB_CFG = f'{CFG}/p660.yaml'
+CL_CFG = f'{CFG}/clusters.yaml'
 
-old = SQLite(f'{OUT}/_p660.db')
-db = SQLite(f'{OUT}/p660.db', config=f'{CFG}/p660.yaml')
-credentials = load('config/WebUtils/twitterapi_cred.yaml')
-clusters = load(f'{CFG}/clusters.yaml')
+mergers = {}
+for j,u in load(CL_CFG).items():
+	for v in u[1]:
+		try:
+			mergers[v].update(set(u[0]))
+		except KeyError:
+			mergers[v] = set(u[0])
 
-in_look = Queue()
-out_look = Queue()
+p660 = SQLite(DB_OUT, config=DB_CFG)
 
-apis = [
- 	Thread(
-		target=lookup_users,
-		args=(v, 'user', in_look, out_look)
-		) for k,v in credentials.items()]
-
-for t in apis:
- 	t.start()
-
-for k,v in clusters.items():
-	for username in v[0]:
-		print(username)
+for merger,accounts in mergers.items():
+	print(merger)
+	for account in accounts:
+		print(account)
 		
-		in_look.put([username])
-		data = out_look.get()
-		
-		row = parse_user_object(data[0])
-		db.fetch(name='insert_Users', params=[row])
-		
-		f = {'t':username}
-		db.fetch(name='create_fws', format=f)
-		
-		q = f'SELECT * FROM IsFollowedBy WHERE Users_id1 = {data[0]["id"]}'
-		cache = []
-		for i,row in enumerate(old.yields(query=q)):
-			if not i%1000: print(i, end=' ')
-			cache.append((row[0],row[1],None,None))
-			if len(cache) > 10000:
-				db.fetch(name='insert_fws', format=f, params=cache)
-				cache = []
-		print('\n')
-		db.fetch(name='insert_fws', format=f, params=cache)
-
-
-for _ in apis:
-	in_look.put(None)
-for t in apis:
-	t.join()
-
-del old
-del db
+		p660.drop('index', f'{account}_Fwsid1', if_exists=True)
+		p660.drop('index', f'{account}_Fwsid2', if_exists=True)
+		p660.drop('index', f'{account}_FFid1', if_exists=True)
+		p660.drop('index', f'{account}_FFid2', if_exists=True)

@@ -20,7 +20,6 @@ DB_CFG = f'{CFG}/p660.yaml'
 CL_CFG = f'{CFG}/clusters.yaml'
 CR_CFG = 'config/WebUtils/twitterapi_cred.yaml'
 
-
 # start threads
 apis = {
 	get_friend_ids : [Queue(), Queue(), []],
@@ -46,9 +45,7 @@ for j,u in load(CL_CFG).items():
 
 # prepare database
 p660 = SQLite(DB_OUT, config=DB_CFG)
-p660.fetch(query='DROP TABLE Collected;')
 p660.fetch(name='create_collected')
-
 for merger,accounts in mergers.items():
 	print(merger)
 	for account in accounts:
@@ -56,21 +53,16 @@ for merger,accounts in mergers.items():
 		
 		# prepare FF table
 		p660.fetch(name='create_ff', format={'t':account})
-		
-		# prepare indexes for fast querying
-		qs = [
-			f'CREATE INDEX IF NOT EXISTS {account}_Fwsid1 ON {account}_Fws(id1);',
-			f'CREATE INDEX IF NOT EXISTS {account}_Fwsid2 ON {account}_Fws(id2);',
-			f'CREATE INDEX IF NOT EXISTS {account}_FFid1 ON {account}_FF(id1);',
-			f'CREATE INDEX IF NOT EXISTS {account}_FFid2 ON {account}_FF(id2);'
-			]
-		for q in qs:
-			p660.fetch(query=q)
-		
+				
 		start = time.time()
 		pqueue = PriorityQueue()
+		rows = [[],[]]
 		while time.time() - start < MAX_DELTA:
 			if pqueue.qsize() == 0:
+				p660.add_index(f'{account}_Fwsid1', f'{account}_Fws', 'id1')
+				p660.add_index(f'{account}_Fwsid2', f'{account}_Fws', 'id2')
+				p660.add_index(f'{account}_FFid1', f'{account}_FF', 'id1')
+				p660.add_index(f'{account}_FFid2', f'{account}_FF', 'id2')
 				q = (
 					f'CREATE TEMPORARY TABLE {account}_remainingFws AS '
 					f'SELECT a.id2 AS id FROM {account}_Fws a '
@@ -104,6 +96,10 @@ for merger,accounts in mergers.items():
 				p660.fetch(query=f'DROP TABLE {account}_remainingFF;')
 				if pqueue.qsize() == 0:
 					break
+				p660.drop('index', f'{account}_Fwsid1')
+				p660.drop('index', f'{account}_Fwsid2')
+				p660.drop('index', f'{account}_FFid1')
+				p660.drop('index', f'{account}_FFid2')
 			
 			p, uid = pqueue.get()
 			apis[lookup_users][0].put([uid])
@@ -114,7 +110,7 @@ for merger,accounts in mergers.items():
 			obj = parse_user_object(data[0])
 			print('\t', round(p,6), obj[0], obj[14])
 			
-			rows = [[obj],[]]
+			rows[0].append(obj)
 			if not obj[13]: # if not protected
 				if obj[6] > 0: # if followers > 0
 					if obj[6] <= 200:
@@ -136,7 +132,7 @@ for merger,accounts in mergers.items():
 						apis[get_friend_ids][0].put((uid,-1,5000))
 						data = apis[get_friend_ids][1].get()
 						rows[1].extend((uid, x, None, None) for x in data['ids'])
-			
+
 			print('\t\tinserting')
 			p660.fetch(name='insert_Users', params=rows[0])
 			p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
