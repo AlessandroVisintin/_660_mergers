@@ -138,7 +138,7 @@ for merger,accounts in mergers.items():
 						rows[1].extend((uid, x, None, None) for x in data['ids'])
 			
 			rows[0].append(obj)
-			row[2].append(uid)
+			rows[2].append(uid)
 			if len(row[0]) > 100:
 				print('\t\tinsert')
 				p660.fetch(name='insert_Users', params=rows[0])
