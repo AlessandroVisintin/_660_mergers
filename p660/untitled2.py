@@ -4,14 +4,16 @@ OUT = 'out/p660'
 
 db = SQLite(f'{OUT}/p660.db')
 
-for row in db.yields(query='SELECT * FROM Users'):
- 	print(row)
+db.schema()
+
+# for row in db.yields(query='SELECT * FROM Users'):
+#  	print(row)
 
 
-print(db.size('Collected'))
-for row in db.yields(query='SELECT * FROM Collected;'):
- 	print(row)
- 	break
+# print(db.size('Collected'))
+# for row in db.yields(query='SELECT * FROM Collected;'):
+#  	print(row)
+# 	break
 
 # q = (
 # 	f'SELECT * FROM ATVI_AB_Fws a '

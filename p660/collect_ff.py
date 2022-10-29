@@ -56,7 +56,6 @@ for merger,accounts in mergers.items():
 				
 		start = time.time()
 		pqueue = PriorityQueue()
-		rows = [[],[]]
 		while time.time() - start < MAX_DELTA:
 			if pqueue.qsize() == 0:
 				p660.add_index(
@@ -115,6 +114,7 @@ for merger,accounts in mergers.items():
 			obj = parse_user_object(data[0])
 			print('\t', round(p,6), obj[0], obj[14])
 			
+			rows = [[],[]]
 			rows[0].append(obj)
 			if not obj[13]: # if not protected
 				if obj[6] > 0: # if followers > 0
