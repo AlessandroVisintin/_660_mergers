@@ -139,16 +139,16 @@ for merger,accounts in mergers.items():
 			
 			rows[0].append(obj)
 			rows[2].append(uid)
-			if len(row[0]) > 100:
+			if len(rows[0]) > 100:
 				print('\t\tinsert')
 				p660.fetch(name='insert_Users', params=rows[0])
 				p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
-				p660.fetch(name='insert_collected', params=row[2])
+				p660.fetch(name='insert_collected', params=rows[2])
 				rows = [[],[],[]]
 	
 		p660.fetch(name='insert_Users', params=rows[0])
 		p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
-		p660.fetch(name='insert_collected', params=row[2])
+		p660.fetch(name='insert_collected', params=rows[2])
 
 # close db
 del p660
