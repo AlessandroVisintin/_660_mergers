@@ -56,6 +56,7 @@ for merger,accounts in mergers.items():
 				
 		start = time.time()
 		pqueue = PriorityQueue()
+		rows = [[],[],[]]
 		while time.time() - start < MAX_DELTA:
 			if pqueue.qsize() == 0:
 				p660.add_index(
@@ -90,7 +91,7 @@ for merger,accounts in mergers.items():
 					f'SELECT id2, COUNT(*) AS e FROM {account}_remainingFF '
 					f'GROUP BY id2) c ON a.id = c.id2 '
 					f'ORDER BY deg DESC '
-					f'LIMIT 3600;'
+					f'LIMIT 1000;'
 					)
 				for row in p660.fetch(query=q):
 					p = 2 if row[1] is None else 1 / row[1]
@@ -112,10 +113,8 @@ for merger,accounts in mergers.items():
 				continue
 			
 			obj = parse_user_object(data[0])
-			print('\t', round(p,6), obj[0], obj[14])
+			print('\t', round(p,6), obj[0], obj[14], pqueue.qsize())
 			
-			rows = [[],[]]
-			rows[0].append(obj)
 			if not obj[13]: # if not protected
 				if obj[6] > 0: # if followers > 0
 					if obj[6] <= 200:
@@ -137,11 +136,19 @@ for merger,accounts in mergers.items():
 						apis[get_friend_ids][0].put((uid,-1,5000))
 						data = apis[get_friend_ids][1].get()
 						rows[1].extend((uid, x, None, None) for x in data['ids'])
-
-			print('\t\tinserting')
-			p660.fetch(name='insert_Users', params=rows[0])
-			p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
-			p660.fetch(name='insert_collected', params=[(uid,)])
+			
+			rows[0].append(obj)
+			row[2].append(uid)
+			if len(row[0]) > 100:
+				print('\t\tinsert')
+				p660.fetch(name='insert_Users', params=rows[0])
+				p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
+				p660.fetch(name='insert_collected', params=row[2])
+				rows = [[],[],[]]
+	
+		p660.fetch(name='insert_Users', params=rows[0])
+		p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
+		p660.fetch(name='insert_collected', params=row[2])
 
 # close db
 del p660
