@@ -8,7 +8,7 @@ from WebUtils.threaded_twitter import lookup_users
 from JSONWrap.utils import load
 
 import time
-from queue import Queue, PriorityQueue
+from queue import Queue
 from threading import Thread
 
 
@@ -55,25 +55,30 @@ for merger,accounts in mergers.items():
 		p660.fetch(name='create_collected', format={'t':account})
 				
 		start = time.time()
-		pqueue = PriorityQueue()
+		tovisit = set()
 		rows = [[],[],[]]
 		while time.time() - start < MAX_DELTA:
-			if pqueue.qsize() == 0:
-				print('\tFill pqueue')
+			if len(tovisit) == 0:
+				print('\tFill tovisit', end='')
 				p660.add_index(
 					f'{account}_Fwsid1', f'{account}_Fws', 'id1', if_not_exists=True)
+				print('.', end='')
 				p660.add_index(
 					f'{account}_Fwsid2', f'{account}_Fws', 'id2', if_not_exists=True)
+				print('.', end='')
 				p660.add_index(
 					f'{account}_FFid1', f'{account}_FF', 'id1', if_not_exists=True)
+				print('.', end='')
 				p660.add_index(
 					f'{account}_FFid2', f'{account}_FF', 'id2', if_not_exists=True)
+				print('.', end='')
 				q = (
 					f'CREATE TEMPORARY TABLE {account}_remainingFws AS '
 					f'SELECT a.id2 AS id FROM {account}_Fws a '
 					f'LEFT JOIN {account}_collected b ON a.id2 = b.id '
 					f'WHERE b.id IS NULL;'
 					)
+				print('.', end='')
 				p660.fetch(query=q)
 				q = (
 					f'CREATE TEMPORARY TABLE {account}_remainingFF AS '
@@ -81,6 +86,7 @@ for merger,accounts in mergers.items():
 					f'INNER JOIN {account}_FF b ON a.id = b.id1 '
 					f'INNER JOIN {account}_remainingFws c ON b.id2 = c.id;'
 					)
+				print('.', end='')
 				p660.fetch(query=q)
 				q = (
 					f'SELECT a.id, CASE WHEN b.e < c.e THEN b.e ELSE c.e END AS deg '
@@ -94,9 +100,20 @@ for merger,accounts in mergers.items():
 					f'ORDER BY deg DESC '
 					f'LIMIT 1000;'
 					)
+				p = []
 				for row in p660.fetch(query=q):
-					p = 2 if row[1] is None else 1 / row[1]
-					pqueue.put((p,row[0]))
+					p.append(0 if row[1] is None else row[1])
+					tovisit.add(row[0])
+				print(f'\n\t{min(p)} - {sum(p) / len(p)} - {max(p)}')
+				q = (
+					f'SELECT id '
+					f'FROM {account}_remainingFws '
+					f'ORDER BY RANDOM() '
+					f'LIMIT 1000;'
+					)
+				for row in p660.fetch(query=q):
+					tovisit.add(row[0])
+				
 				p660.drop('table', f'{account}_remainingFws')
 				p660.drop('table', f'{account}_remainingFF')
 				p660.drop('index', f'{account}_Fwsid1')
@@ -104,17 +121,17 @@ for merger,accounts in mergers.items():
 				p660.drop('index', f'{account}_FFid1')
 				p660.drop('index', f'{account}_FFid2')
 
-				if pqueue.qsize() == 0:
+				if len(tovisit) == 0:
 					break
 			
-			p, uid = pqueue.get()
+			uid = tovisit.pop()
 			apis[lookup_users][0].put([uid])
 			data = apis[lookup_users][1].get()
 			if data is None:
 				continue
 			
 			obj = parse_user_object(data[0])
-			print('\t', round(p,6), obj[0], obj[14], pqueue.qsize())
+			print('\t', obj[0], obj[14], len(tovisit))
 			
 			if not obj[13]: # if not protected
 				if obj[6] > 0: # if followers > 0
