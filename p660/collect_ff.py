@@ -92,7 +92,7 @@ for merger,accounts in mergers.items():
 					f'SELECT id2, COUNT(*) AS e FROM {account}_remainingFF '
 					f'GROUP BY id2) c ON a.id = c.id2 '
 					f'ORDER BY deg DESC '
-					f'LIMIT 50;'
+					f'LIMIT 1000;'
 					)
 				for row in p660.fetch(query=q):
 					p = 2 if row[1] is None else 1 / row[1]
