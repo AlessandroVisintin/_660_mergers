@@ -45,20 +45,21 @@ for j,u in load(CL_CFG).items():
 
 # prepare database
 p660 = SQLite(DB_OUT, config=DB_CFG)
-p660.fetch(name='create_collected')
 for merger,accounts in mergers.items():
 	print(merger)
 	for account in accounts:
 		print(account)
 		
-		# prepare FF table
+		# prepare database
 		p660.fetch(name='create_ff', format={'t':account})
+		p660.fetch(name='create_collected', format={'t':account})
 				
 		start = time.time()
 		pqueue = PriorityQueue()
 		rows = [[],[],[]]
 		while time.time() - start < MAX_DELTA:
 			if pqueue.qsize() == 0:
+				print('\tFill pqueue')
 				p660.add_index(
 					f'{account}_Fwsid1', f'{account}_Fws', 'id1', if_not_exists=True)
 				p660.add_index(
@@ -70,7 +71,7 @@ for merger,accounts in mergers.items():
 				q = (
 					f'CREATE TEMPORARY TABLE {account}_remainingFws AS '
 					f'SELECT a.id2 AS id FROM {account}_Fws a '
-					f'LEFT JOIN Collected b ON a.id2 = b.id '
+					f'LEFT JOIN {account}_collected b ON a.id2 = b.id '
 					f'WHERE b.id IS NULL;'
 					)
 				p660.fetch(query=q)
@@ -91,7 +92,7 @@ for merger,accounts in mergers.items():
 					f'SELECT id2, COUNT(*) AS e FROM {account}_remainingFF '
 					f'GROUP BY id2) c ON a.id = c.id2 '
 					f'ORDER BY deg DESC '
-					f'LIMIT 1000;'
+					f'LIMIT 50;'
 					)
 				for row in p660.fetch(query=q):
 					p = 2 if row[1] is None else 1 / row[1]
@@ -138,14 +139,14 @@ for merger,accounts in mergers.items():
 						rows[1].extend((uid, x, None, None) for x in data['ids'])
 			
 			rows[0].append(obj)
-			rows[2].append(uid)
+			rows[2].append((uid,))
 			if len(rows[0]) > 100:
 				print('\t\tinsert')
 				p660.fetch(name='insert_Users', params=rows[0])
 				p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
-				p660.fetch(name='insert_collected', params=rows[2])
+				p660.fetch(name='insert_collected', format={'t':account}, params=rows[2])
 				rows = [[],[],[]]
-	
+
 		p660.fetch(name='insert_Users', params=rows[0])
 		p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
 		p660.fetch(name='insert_collected', params=rows[2])
