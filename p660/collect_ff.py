@@ -43,12 +43,24 @@ for j,u in load(CL_CFG).items():
 		except KeyError:
 			mergers[v] = set(u[0])
 
+# load done
+try:
+	with open(f'{OUT}/done.txt', 'r') as f:
+		done = set([x.strip() for x in f])
+except FileNotFoundError:
+	done = set()
+	
+
 # prepare database
 p660 = SQLite(DB_OUT, config=DB_CFG)
 for merger,accounts in mergers.items():
 	print(merger)
 	for account in accounts:
 		print(account)
+		
+		if account in done:
+			print('already done')
+			continue
 		
 		# prepare database
 		p660.fetch(name='create_ff', format={'t':account})
@@ -73,49 +85,47 @@ for merger,accounts in mergers.items():
 					f'{account}_FFid2', f'{account}_FF', 'id2', if_not_exists=True)
 				print('.', end='')
 				q = (
-					f'CREATE TEMPORARY TABLE {account}_remainingFws AS '
-					f'SELECT a.id2 AS id FROM {account}_Fws a '
-					f'LEFT JOIN {account}_collected b ON a.id2 = b.id '
-					f'WHERE b.id IS NULL;'
-					)
-				print('.', end='')
-				p660.fetch(query=q)
-				q = (
 					f'CREATE TEMPORARY TABLE {account}_remainingFF AS '
-					f'SELECT b.id1, b.id2 FROM {account}_remainingFws a '
-					f'INNER JOIN {account}_FF b ON a.id = b.id1 '
-					f'INNER JOIN {account}_remainingFws c ON b.id2 = c.id;'
+					f'SELECT b.id1, b.id2 FROM {account}_Fws a '
+					f'INNER JOIN {account}_FF b ON a.id2 = b.id1 '
+					f'INNER JOIN {account}_Fws c ON b.id2 = c.id2;'
 					)
-				print('.', end='')
 				p660.fetch(query=q)
+				print('.', end='')
 				q = (
-					f'SELECT a.id, CASE WHEN b.e < c.e THEN b.e ELSE c.e END AS deg '
-					f'FROM {account}_remainingFws a '
+					f'CREATE TEMPORARY TABLE {account}_countFF AS '
+					f'SELECT '
+					f'a.id2 AS id, '
+					f'CASE WHEN b.e < c.e THEN b.e ELSE c.e END AS deg '
+					f'FROM {account}_Fws a '
 					f'LEFT JOIN ('
 					f'SELECT id1, COUNT(*) AS e FROM {account}_remainingFF '
-					f'GROUP BY id1) b ON a.id = b.id1 '
+					f'GROUP BY id1'
+					f') b ON a.id2 = b.id1 '
 					f'LEFT JOIN ('
 					f'SELECT id2, COUNT(*) AS e FROM {account}_remainingFF '
-					f'GROUP BY id2) c ON a.id = c.id2 '
-					f'ORDER BY deg DESC '
-					f'LIMIT 1000;'
+					f'GROUP BY id2'
+					f') c ON a.id2 = c.id2 '
+					f'LEFT JOIN {account}_collected d ON a.id2 = d.id '
+					f'WHERE d.id IS NULL '
+					f'ORDER BY deg DESC;'
 					)
+				p660.fetch(query=q)
+				print('.', end='')
+				
+				q = f'SELECT id, deg FROM {account}_countFF LIMIT 1000;'
 				p = []
 				for row in p660.fetch(query=q):
 					p.append(0 if row[1] is None else row[1])
 					tovisit.add(row[0])
 				print(f'\n\t{min(p)} - {sum(p) / len(p)} - {max(p)}')
-				q = (
-					f'SELECT id '
-					f'FROM {account}_remainingFws '
-					f'ORDER BY RANDOM() '
-					f'LIMIT 1000;'
-					)
+				
+				q = f'SELECT id FROM {account}_countFF ORDER BY RANDOM() LIMIT 1000;'
 				for row in p660.fetch(query=q):
 					tovisit.add(row[0])
 				
-				p660.drop('table', f'{account}_remainingFws')
 				p660.drop('table', f'{account}_remainingFF')
+				p660.drop('table', f'{account}_countFF')
 				p660.drop('index', f'{account}_Fwsid1')
 				p660.drop('index', f'{account}_Fwsid2')
 				p660.drop('index', f'{account}_FFid1')
@@ -166,7 +176,12 @@ for merger,accounts in mergers.items():
 
 		p660.fetch(name='insert_Users', params=rows[0])
 		p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
-		p660.fetch(name='insert_collected', params=rows[2])
+		p660.fetch(name='insert_collected', format={'t':account}, params=rows[2])
+		
+		done.add(account)
+		with open(f'{OUT}/done.txt', 'w') as f:
+			for e in done:
+				f.write(f'{e}\n')
 
 # close db
 del p660
