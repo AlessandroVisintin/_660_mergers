@@ -102,19 +102,22 @@ for cluster, values in clusters.items():
 					'SELECT id2, COUNT(*) AS e FROM remainingFF '
 					'GROUP BY id2'
 					') c ON a.id2 = c.id2 '
-					'LEFT JOIN Users d ON a.id2 = d.id '
+					'LEFT JOIN Collected d ON a.id2 = d.id '
 					'WHERE d.id IS NULL '
 					'ORDER BY deg DESC;'
 					)
 				db.fetch(query=q)
 				print('.', end='')
 				
-				q = f'SELECT id, deg FROM countFF LIMIT {LIMIT};'
+				q = 'SELECT id, deg FROM countFF;'
 				p = []
-				for row in db.fetch(query=q):
-					p.append(0 if row[1] is None else row[1])
-					tovisit.add(row[0])
-				print(f'\n\t{min(p)} - {sum(p) / len(p)} - {max(p)}')
+				for rows in db.fetchmany(batch=LIMIT, query=q):
+					rows = set(rows)
+					p.extend([0 if x[1] is None else x[1] for x in rows])
+					tovisit.update(rows)
+					if len(tovisit) > LIMIT:
+						break
+				print(f'\n\t{len(p)} - {min(p)} - {sum(p) / len(p)} - {max(p)}')
 				
 				q = f'SELECT id FROM countFF ORDER BY RANDOM() LIMIT {RAND};'
 				for row in db.fetch(query=q):
@@ -165,10 +168,12 @@ for cluster, values in clusters.items():
 				print('\t\tinsert')
 				db.fetch(name='insert_Users', params=rows[0])
 				db.fetch(name='insert_FF', params=rows[1])
+				db.fetch(name='insert_Collected', params=rows[2])
 				rows = [[],[],[]]
 
 		db.fetch(name='insert_Users', params=rows[0])
 		db.fetch(name='insert_FF', params=rows[1])
+		db.fetch(name='insert_Collected', params=rows[2])
 	
 	db.drop('index', 'Fws_id1')
 	db.drop('index', 'Fws_id2')
