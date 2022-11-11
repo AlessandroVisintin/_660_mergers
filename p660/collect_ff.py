@@ -109,19 +109,19 @@ for cluster, values in clusters.items():
 				db.fetch(query=q)
 				print('.', end='')
 				
-				q = 'SELECT id, deg FROM countFF;'
+				q = f'SELECT id, deg FROM countFF LIMIT {5 * LIMIT};'
 				p = []
-				for rows in db.fetchmany(batch=LIMIT, query=q):
-					rows = set(rows)
-					p.extend([0 if x[1] is None else x[1] for x in rows])
-					tovisit.update(rows)
+				for tmp in db.fetchmany(batch=LIMIT, query=q):
+					tmp = set(tmp)
+					p.extend([0 if x[1] is None else x[1] for x in tmp])
+					tovisit.update([x[0] for x in tmp])
 					if len(tovisit) > LIMIT:
 						break
 				print(f'\n\t{len(p)} - {min(p)} - {sum(p) / len(p)} - {max(p)}')
 				
 				q = f'SELECT id FROM countFF ORDER BY RANDOM() LIMIT {RAND};'
-				for row in db.fetch(query=q):
-					tovisit.add(row[0])
+				for tmp in db.fetch(query=q):
+					tovisit.add(tmp[0])
 				
 				db.drop('table', 'remainingFF')
 				db.drop('table', 'countFF')
