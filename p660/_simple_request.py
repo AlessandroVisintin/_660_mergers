@@ -22,7 +22,7 @@ api = apiv11(credentials[key], 'user')
 #d1 = api.get_followers(screen_name=USERNAME)
 #d2 = api.get_follower_ids(screen_name=USERNAME)
 
-d3 = api.lookup_users(user_id=[2981461])
+d3 = api.lookup_users(user_id=[42264740])
 
 #rates = api.rate_limit_status()
 

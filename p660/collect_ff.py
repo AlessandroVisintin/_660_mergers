@@ -7,6 +7,7 @@ from WebUtils.threaded_twitter import get_followers
 from WebUtils.threaded_twitter import lookup_users
 from JSONWrap.utils import load
 
+import sys
 import time
 from queue import Queue
 from threading import Thread
@@ -15,10 +16,16 @@ from threading import Thread
 MAX_DELTA = 60 * 60 * 24
 OUT = 'out/p660'
 CFG = 'config/p660'
-DB_OUT = f'{OUT}/p660.db'
-DB_CFG = f'{CFG}/p660.yaml'
-CL_CFG = f'{CFG}/clusters.yaml'
-CR_CFG = 'config/WebUtils/twitterapi_cred.yaml'
+
+try:
+	LIMIT = int(sys.argv[1])
+except IndexError:
+	LIMIT = 1000
+
+try:
+	RAND = int(sys.argv[2])
+except IndexError:
+	RAND = 250
 
 # start threads
 apis = {
@@ -28,20 +35,14 @@ apis = {
 	get_follower_ids: [Queue(), Queue(), []],
 	lookup_users: [Queue(), Queue(), []],
 	}
-for name, k in load(CR_CFG).items():
+for name, k in load('config/WebUtils/twitterapi_cred.yaml').items():
 	for func, v in apis.items():
 		t = Thread(target=func, args=(k, 'user', v[0], v[1]))
 		t.start()
 		v[2].append(t)
 
 # prepare mergers info
-mergers = {}
-for j,u in load(CL_CFG).items():
-	for v in u[1]:
-		try:
-			mergers[v].update(set(u[0]))
-		except KeyError:
-			mergers[v] = set(u[0])
+clusters = load(f'{CFG}/clusters.yaml')
 
 # load done
 try:
@@ -49,87 +50,80 @@ try:
 		done = set([x.strip() for x in f])
 except FileNotFoundError:
 	done = set()
-	
 
-# prepare database
-p660 = SQLite(DB_OUT, config=DB_CFG)
-for merger,accounts in mergers.items():
-	print(merger)
-	for account in accounts:
+# collect
+for cluster, values in clusters.items():
+	print(cluster)
+	
+	if cluster in done:
+		print('already done')
+		continue
+	
+	db = SQLite(f'{OUT}/{cluster}.db', config=f'{CFG}/p660.yaml')
+	
+	print('Creating Fws indexes', end='')
+	db.add_index('Fws_id1', 'Fws', 'id1', if_not_exists=True)
+	print('.', end='')
+	db.add_index('Fws_id2', 'Fws', 'id2', if_not_exists=True)
+	print('.', end='')
+
+	for account in values[0]:
 		print(account)
-		
-		if account in done:
-			print('already done')
-			continue
-		
-		# prepare database
-		p660.fetch(name='create_ff', format={'t':account})
-		p660.fetch(name='create_collected', format={'t':account})
-				
+
 		start = time.time()
 		tovisit = set()
 		rows = [[],[],[]]
 		while time.time() - start < MAX_DELTA:
 			if len(tovisit) == 0:
 				print('\tFill tovisit', end='')
-				p660.add_index(
-					f'{account}_Fwsid1', f'{account}_Fws', 'id1', if_not_exists=True)
+				db.add_index('FF_id1', 'FF', 'id1', if_not_exists=True)
 				print('.', end='')
-				p660.add_index(
-					f'{account}_Fwsid2', f'{account}_Fws', 'id2', if_not_exists=True)
-				print('.', end='')
-				p660.add_index(
-					f'{account}_FFid1', f'{account}_FF', 'id1', if_not_exists=True)
-				print('.', end='')
-				p660.add_index(
-					f'{account}_FFid2', f'{account}_FF', 'id2', if_not_exists=True)
+				db.add_index('FF_id2', 'FF', 'id2', if_not_exists=True)
 				print('.', end='')
 				q = (
-					f'CREATE TEMPORARY TABLE {account}_remainingFF AS '
-					f'SELECT b.id1, b.id2 FROM {account}_Fws a '
-					f'INNER JOIN {account}_FF b ON a.id2 = b.id1 '
-					f'INNER JOIN {account}_Fws c ON b.id2 = c.id2;'
+					'CREATE TEMPORARY TABLE remainingFF AS '
+					'SELECT b.id1, b.id2 FROM Fws a '
+					'INNER JOIN FF b ON a.id2 = b.id1 '
+					'INNER JOIN Fws c ON b.id2 = c.id2;'
 					)
-				p660.fetch(query=q)
+				db.fetch(query=q)
 				print('.', end='')
 				q = (
-					f'CREATE TEMPORARY TABLE {account}_countFF AS '
-					f'SELECT '
-					f'a.id2 AS id, '
-					f'CASE WHEN b.e < c.e THEN b.e ELSE c.e END AS deg '
-					f'FROM {account}_Fws a '
-					f'LEFT JOIN ('
-					f'SELECT id1, COUNT(*) AS e FROM {account}_remainingFF '
-					f'GROUP BY id1'
-					f') b ON a.id2 = b.id1 '
-					f'LEFT JOIN ('
-					f'SELECT id2, COUNT(*) AS e FROM {account}_remainingFF '
-					f'GROUP BY id2'
-					f') c ON a.id2 = c.id2 '
-					f'LEFT JOIN {account}_collected d ON a.id2 = d.id '
-					f'WHERE d.id IS NULL '
-					f'ORDER BY deg DESC;'
+					'CREATE TEMPORARY TABLE countFF AS '
+					'SELECT '
+					'a.id2 AS id, '
+					'CASE WHEN b.e < c.e THEN b.e ELSE c.e END AS deg '
+					'FROM Fws a '
+					'LEFT JOIN ('
+					'SELECT id1, COUNT(*) AS e FROM remainingFF '
+					'GROUP BY id1'
+					') b ON a.id2 = b.id1 '
+					'LEFT JOIN ('
+					'SELECT id2, COUNT(*) AS e FROM remainingFF '
+					'GROUP BY id2'
+					') c ON a.id2 = c.id2 '
+					'LEFT JOIN Users d ON a.id2 = d.id '
+					'WHERE d.id IS NULL '
+					'ORDER BY deg DESC;'
 					)
-				p660.fetch(query=q)
+				db.fetch(query=q)
 				print('.', end='')
 				
-				q = f'SELECT id, deg FROM {account}_countFF LIMIT 1000;'
+				q = f'SELECT id, deg FROM countFF LIMIT {LIMIT};'
 				p = []
-				for row in p660.fetch(query=q):
+				for row in db.fetch(query=q):
 					p.append(0 if row[1] is None else row[1])
 					tovisit.add(row[0])
 				print(f'\n\t{min(p)} - {sum(p) / len(p)} - {max(p)}')
 				
-				q = f'SELECT id FROM {account}_countFF ORDER BY RANDOM() LIMIT 1000;'
-				for row in p660.fetch(query=q):
+				q = f'SELECT id FROM countFF ORDER BY RANDOM() LIMIT {RAND};'
+				for row in db.fetch(query=q):
 					tovisit.add(row[0])
 				
-				p660.drop('table', f'{account}_remainingFF')
-				p660.drop('table', f'{account}_countFF')
-				p660.drop('index', f'{account}_Fwsid1')
-				p660.drop('index', f'{account}_Fwsid2')
-				p660.drop('index', f'{account}_FFid1')
-				p660.drop('index', f'{account}_FFid2')
+				db.drop('table', 'remainingFF')
+				db.drop('table', 'countFF')
+				db.drop('index', 'FF_id1')
+				db.drop('index', 'FF_id2')
 
 				if len(tovisit) == 0:
 					break
@@ -169,22 +163,21 @@ for merger,accounts in mergers.items():
 			rows[2].append((uid,))
 			if len(rows[0]) > 100:
 				print('\t\tinsert')
-				p660.fetch(name='insert_Users', params=rows[0])
-				p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
-				p660.fetch(name='insert_collected', format={'t':account}, params=rows[2])
+				db.fetch(name='insert_Users', params=rows[0])
+				db.fetch(name='insert_FF', params=rows[1])
 				rows = [[],[],[]]
 
-		p660.fetch(name='insert_Users', params=rows[0])
-		p660.fetch(name='insert_ff', format={'t':account}, params=rows[1])
-		p660.fetch(name='insert_collected', format={'t':account}, params=rows[2])
-		
-		done.add(account)
-		with open(f'{OUT}/done.txt', 'w') as f:
-			for e in done:
-				f.write(f'{e}\n')
-
-# close db
-del p660
+		db.fetch(name='insert_Users', params=rows[0])
+		db.fetch(name='insert_FF', params=rows[1])
+	
+	db.drop('index', 'Fws_id1')
+	db.drop('index', 'Fws_id2')
+	del db
+	
+	done.add(account)
+	with open(f'{OUT}/done.txt', 'w') as f:
+		for e in done:
+			f.write(f'{e}\n')
 
 # close threads
 for func, v in apis.items():
