@@ -179,7 +179,7 @@ for cluster, values in clusters.items():
 	db.drop('index', 'Fws_id2')
 	del db
 	
-	done.add(account)
+	done.add(cluster)
 	with open(f'{OUT}/done.txt', 'w') as f:
 		for e in done:
 			f.write(f'{e}\n')
